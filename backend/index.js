@@ -20,12 +20,7 @@ app.use(cors({
 // ব্রাউজারের Preflight রিকোয়েস্টের জন্য এই লাইনটি যোগ করুন
 app.options('*', cors());
 
-// গ্লোবাল OPTIONS রিকোয়েস্ট হ্যান্ডলার
-app.options('*', cors());
-// OPTIONS রিকোয়েস্টের জন্য গ্লোবাল হ্যান্ডলার
-app.options('*', cors());
 
-app.use(express.json());
 
 /* ===== MySQL Connection Setup ===== */
 const sequelize = new Sequelize(
