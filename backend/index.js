@@ -7,14 +7,18 @@ require("dotenv").config();
 
 const app = express();
 
-// CORS কনফিগারেশন - এটি আপনার সমস্যার মূল সমাধান
-// index.js ফাইলে এই অংশটি আপডেট করুন
+// index.js ফাইলে এই অংশটুকু হুবহু পরিবর্তন করুন
+const cors = require("cors");
+
 app.use(cors({
-  origin: "*", // সব ডোমেইন অ্যালাউ করবে
+  origin: "*", // সব ডোমেইন থেকে রিকোয়েস্ট গ্রহণ করবে
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"], // OPTIONS থাকা বাধ্যতামূলক
   allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
   credentials: true
 }));
+
+// ব্রাউজারের Preflight রিকোয়েস্টের জন্য এই লাইনটি যোগ করুন
+app.options('*', cors());
 
 // গ্লোবাল OPTIONS রিকোয়েস্ট হ্যান্ডলার
 app.options('*', cors());
