@@ -8,9 +8,9 @@ require("dotenv").config();
 const app = express();
 app.use(express.json());
 app.use(cors({
-  origin: "*", // সাময়িকভাবে সব এক্সেস দেওয়ার জন্য এটি ব্যবহার করুন
-  methods: ["GET", "POST"],
-  credentials: true
+  origin: "*", // সব ডোমেইন থেকে রিকোয়েস্ট অ্যালাউ করবে
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"]
 }));
 /* ===== MySQL Connection Setup ===== */
 const sequelize = new Sequelize(
