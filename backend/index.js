@@ -8,13 +8,16 @@ require("dotenv").config();
 const app = express();
 
 // CORS কনফিগারেশন - এটি আপনার সমস্যার মূল সমাধান
+// index.js ফাইলে এই অংশটি আপডেট করুন
 app.use(cors({
-  origin: "*", 
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"], // OPTIONS অবশ্যই থাকতে হবে
-  allowedHeaders: ["Content-Type", "Authorization"],
+  origin: "*", // সব ডোমেইন অ্যালাউ করবে
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"], // OPTIONS থাকা বাধ্যতামূলক
+  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
   credentials: true
 }));
 
+// গ্লোবাল OPTIONS রিকোয়েস্ট হ্যান্ডলার
+app.options('*', cors());
 // OPTIONS রিকোয়েস্টের জন্য গ্লোবাল হ্যান্ডলার
 app.options('*', cors());
 
