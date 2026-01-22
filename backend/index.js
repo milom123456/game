@@ -16,7 +16,6 @@ app.use(cors({
   allowedHeaders: ["Content-Type", "Authorization"],
 }));
 
-app.options("*", cors());
 
 /* ===== MySQL Connection ===== */
 const sequelize = new Sequelize(
