@@ -18,9 +18,9 @@ app.use(cors({
 const sequelize = new Sequelize(
   process.env.MYSQLDATABASE || "railway",
   process.env.MYSQLUSER || "root",
-  process.env.MYSQLPASSWORD || "tFXdZpwSpkNOwNmJHQRnMryHhrrGggij",
+  process.env.MYSQLPASSWORD || "ytRWliruXJvFrAEPIvOAXkLeMVeNWKae",
   {
-    host: process.env.MYSQLHOST || "mysql.railway.internal",
+    host: process.env.MYSQLHOST || "crossover.proxy.rlwy.net",
     port: parseInt(process.env.MYSQLPORT) || 3306,
     dialect: "mysql",
     logging: false,
