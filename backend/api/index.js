@@ -20,8 +20,8 @@ const sequelize = new Sequelize(
   process.env.MYSQLUSER || "root",
   process.env.MYSQLPASSWORD || "tFXdZpwSpkNOwNmJHQRnMryHhrrGggij",
   {
-    host: process.env.MYSQLHOST || "crossover.proxy.rlwy.net",
-    port: parseInt(process.env.MYSQLPORT) || 34935,
+    host: process.env.MYSQLHOST || "mysql.railway.internal",
+    port: parseInt(process.env.MYSQLPORT) || 3306,
     dialect: "mysql",
     logging: false,
     pool: {
