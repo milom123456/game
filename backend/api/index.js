@@ -8,41 +8,39 @@ const cors = require("cors");
 const app = express();
 app.use(express.json());
 
-// ================= CORS =================
-const allowedOrigins = [
-  "http://localhost:5173",          // local dev
-  "https://offerwell.vercel.app"    // production frontend
-];
-
-app.use(cors({
-  origin: (origin, callback) => {
-    if (!origin) return callback(null, true); // Postman / server-to-server
-    if (allowedOrigins.includes(origin)) callback(null, true);
-    else callback(new Error("Not allowed by CORS"));
-  },
-  credentials: true,
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"]
+// CORS Configuration
+app.use(cors({ 
+  origin: ["http://localhost:5173", "https://offerwell.vercel.app"], 
+  credentials: true 
 }));
 
-// ================= DATABASE =================
+// DATABASE CONNECTION (সংশোধিত এবং সিনট্যাক্স এরর মুক্ত)
 const sequelize = new Sequelize(
-  process.env.MYSQL_DATABASE,
-  process.env.MYSQL_USER,
-  process.env.MYSQL_PASSWORD,
+  process.env.MYSQLDATABASE || "railway",
+  process.env.MYSQLUSER || "root",
+  process.env.MYSQLPASSWORD || "tFXdZpwSpkNOwNmJHQRnMryHhrrGggij",
   {
-    host: process.env.MYSQL_HOST,
-    port: parseInt(process.env.MYSQL_PORT),
+    host: process.env.MYSQLHOST || "crossover.proxy.rlwy.net",
+    port: parseInt(process.env.MYSQLPORT) || 34935,
     dialect: "mysql",
-    logging: false
+    logging: false,
+    pool: {
+      max: 5,
+      min: 0,
+      acquire: 30000,
+      idle: 10000
+    },
+    dialectOptions: {
+      connectTimeout: 60000
+    }
   }
 );
 
 sequelize.authenticate()
-  .then(() => console.log("✅ MySQL Connected"))
-  .catch(err => console.error("❌ DB Error:", err));
+  .then(() => console.log("✅ MySQL Connected Successfully!"))
+  .catch(err => console.error("❌ DB Connection Error:", err));
 
-// ================= MODELS =================
+// USER MODEL
 const User = sequelize.define("User", {
   fullName: { type: DataTypes.STRING, allowNull: false },
   email: { type: DataTypes.STRING, unique: true, allowNull: false },
@@ -52,78 +50,52 @@ const User = sequelize.define("User", {
 
 sequelize.sync();
 
-// ================= MIDDLEWARE =================
-const auth = async (req, res, next) => {
+// CPAGRIP POSTBACK ROUTE
+app.get("/api/postback/cpagrip", async (req, res) => {
   try {
-    const token = req.headers.authorization?.split(" ")[1];
-    if (!token) return res.status(401).json({ message: "Unauthorized" });
+    const { tracking_id, payout, ssword } = req.query;
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.userId = decoded.id;
-    next();
-  } catch {
-    res.status(401).json({ message: "Invalid Token" });
+    if (ssword !== "Ee345m@#") {
+      return res.status(401).send("Unauthorized: Invalid Password");
+    }
+
+    const user = await User.findByPk(tracking_id);
+    if (user) {
+      user.balance += parseFloat(payout || 0);
+      await user.save();
+      console.log(`💰 Balance Updated: User ${user.fullName} earned $${payout}`);
+      return res.send("success");
+    }
+    res.status(404).send("User not found");
+  } catch (err) {
+    console.error("Postback Error:", err);
+    res.status(500).send("Internal Server Error");
   }
-};
+});
 
-// ================= ROUTES =================
-
-// Signup
+// AUTH ROUTES
 app.post("/api/signup", async (req, res) => {
   try {
     const { fullName, email, password } = req.body;
-    if (!fullName || !email || !password)
-      return res.status(400).json({ message: "সব ফিল্ড প্রয়োজন" });
-
-    const exists = await User.findOne({ where: { email } });
-    if (exists) return res.status(400).json({ message: "ইমেইল আগে থেকেই আছে" });
-
     const hash = await bcrypt.hash(password, 10);
     await User.create({ fullName, email, password: hash });
-
-    res.json({ success: true, message: "Signup সফল" });
-  } catch (err) {
-    res.status(500).json({ message: "Server error" });
-  }
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ message: "Signup failed" }); }
 });
 
-// Login
 app.post("/api/login", async (req, res) => {
   try {
     const { email, password } = req.body;
-
     const user = await User.findOne({ where: { email } });
-    if (!user) return res.status(404).json({ message: "User পাওয়া যায়নি" });
-
-    const match = await bcrypt.compare(password, user.password);
-    if (!match) return res.status(401).json({ message: "পাসওয়ার্ড ভুল" });
-
-    const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: "1d" });
-
-    res.json({
-      token,
-      user: { id: user.id, name: user.fullName, balance: user.balance }
-    });
-  } catch {
-    res.status(500).json({ message: "Server error" });
-  }
+    if (user && await bcrypt.compare(password, user.password)) {
+      const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET || "f4a9b3c6", { expiresIn: "1d" });
+      return res.json({ token, user: { id: user.id, name: user.fullName, balance: user.balance } });
+    }
+    res.status(401).json({ message: "Invalid credentials" });
+  } catch (err) { res.status(500).json({ message: "Login failed" }); }
 });
 
-// Profile
-app.get("/api/me", auth, async (req, res) => {
-  const user = await User.findByPk(req.userId, { attributes: { exclude: ["password"] } });
-  res.json(user);
-});
+app.get("/", (req, res) => res.send("🚀 Backend is Running and Active!"));
 
-// Add balance (demo)
-app.post("/api/add-balance", auth, async (req, res) => {
-  const { amount } = req.body;
-  const user = await User.findByPk(req.userId);
-  user.balance += Number(amount || 0);
-  await user.save();
-  res.json({ balance: user.balance });
-});
-
-// Start server
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`🚀 Backend running on port ${PORT}`));
+app.listen(PORT, () => console.log(`🚀 Backend server live on port ${PORT}`));
