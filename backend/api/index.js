@@ -10,7 +10,11 @@ app.use(express.json());
 
 // CORS Configuration
 app.use(cors({ 
-  origin: ["http://localhost:5173", "https://offerwell.vercel.app"], 
+  origin:  [
+  "http://localhost:5173",
+  "https://offerwell.vercel.app",
+  "https://kalon.vercel.app"
+], 
   credentials: true 
 }));
 
