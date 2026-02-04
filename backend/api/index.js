@@ -8,64 +8,79 @@ const jwt = require("jsonwebtoken");
 const app = express();
 app.use(express.json());
 
-/* ================= CORS (DEV + PROD SAFE) ================= */
-app.use(cors({
-  origin: "*", // শুধু signup এর জন্য সহজ রাখলাম
-  methods: ["GET", "POST", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"]
-}));
+/* ================= CORS ================= */
+app.use(
+  cors({
+    origin: "*",
+    methods: ["GET", "POST", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  })
+);
 
-app.options("*", cors());
-
-/* ================= DATABASE (Railway MySQL) ================= */
+/* ================= DATABASE (RAILWAY FIXED) ================= */
 const sequelize = new Sequelize(
-  process.env.MYSQLDATABASE,
-  process.env.MYSQLUSER,
-  process.env.MYSQLPASSWORD,
+  process.env.MYSQL_DATABASE,
+  process.env.MYSQL_USER,
+  process.env.MYSQL_PASSWORD,
   {
-    host: process.env.MYSQLHOST,
-    port: Number(process.env.MYSQLPORT),
+    host: process.env.MYSQL_HOST,
+    port: Number(process.env.MYSQL_PORT),
     dialect: "mysql",
+    dialectModule: require("mysql2"), // ✅ MUST
+    logging: false,
+
     dialectOptions: {
       ssl: {
         require: true,
-        rejectUnauthorized: false // 🔥 Railway FIX
-      }
+        rejectUnauthorized: false, // ✅ Railway internal
+      },
     },
-    logging: false
+
+    pool: {
+      max: 5,
+      min: 0,
+      acquire: 60000,
+      idle: 10000,
+    },
   }
 );
 
-/* ================= USER MODEL ================= */
+/* ================= MODELS ================= */
 const User = sequelize.define("User", {
-  fullName: {
-    type: DataTypes.STRING,
-    allowNull: false
-  },
-  email: {
-    type: DataTypes.STRING,
-    unique: true,
-    allowNull: false
-  },
-  password: {
-    type: DataTypes.STRING,
-    allowNull: false
-  }
+  fullName: { type: DataTypes.STRING, allowNull: false },
+  email: { type: DataTypes.STRING, allowNull: false, unique: true },
+  password: { type: DataTypes.STRING, allowNull: false },
 });
 
-/* ================= DB CONNECT ================= */
+/* ================= DB READY FLAG ================= */
+let dbReady = false;
+
+/* ================= DB INIT ================= */
 (async () => {
   try {
     await sequelize.authenticate();
     console.log("✅ Railway MySQL Connected");
-    await sequelize.sync();
-    console.log("✅ Table Ready");
+
+    await sequelize.sync({ alter: true });
+    console.log("✅ Tables Synced");
+
+    dbReady = true;
   } catch (err) {
-    console.error("❌ DB Error:", err.message);
+    console.error("❌ DB Error FULL:", err);
   }
 })();
 
-/* ================= SIGNUP API ================= */
+/* ================= DB GUARD ================= */
+app.use((req, res, next) => {
+  if (!dbReady) {
+    return res.status(503).json({
+      message: "Database not connected yet",
+    });
+  }
+  next();
+});
+
+/* ================= ROUTES ================= */
 app.post("/api/signup", async (req, res) => {
   try {
     const { fullName, email, password } = req.body;
@@ -84,12 +99,12 @@ app.post("/api/signup", async (req, res) => {
     const user = await User.create({
       fullName,
       email,
-      password: hash
+      password: hash,
     });
 
     const token = jwt.sign(
       { id: user.id },
-      process.env.JWT_SECRET || "secret123",
+      process.env.JWT_SECRET,
       { expiresIn: "1d" }
     );
 
@@ -99,11 +114,12 @@ app.post("/api/signup", async (req, res) => {
       user: {
         id: user.id,
         fullName: user.fullName,
-        email: user.email
-      }
+        email: user.email,
+      },
     });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error("Signup error:", err);
+    res.status(500).json({ message: "Internal server error" });
   }
 });
 
