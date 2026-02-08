@@ -11,10 +11,7 @@ app.use(express.json());
 /* ================= CORS ================= */
 app.use(
   cors({
-    origin: [
-      "http://localhost:5173",
-      "https://remarkable-healing-production-d38b.up.railway.app",
-    ],
+    origin: true, // এটি সব ডোমেইনকে (লোকালহোস্ট + রেলওয়ে ফ্রন্টএন্ড) অটো অনুমতি দেবে
     credentials: true,
   })
 );
