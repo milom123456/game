@@ -19,34 +19,28 @@ app.use(
   })
 );
 
-/* ================= DATABASE (RAILWAY MYSQL) ================= */
 const sequelize = new Sequelize(
   process.env.MYSQLDATABASE,
   process.env.MYSQLUSER,
   process.env.MYSQLPASSWORD,
   {
     host: process.env.MYSQLHOST,
-    port: Number(process.env.MYSQLPORT),
+    port: Number(process.env.MYSQLPORT) || 3306,
     dialect: "mysql",
-    dialectModule: require("mysql2"),
+    dialectModule: require("mysql2"), 
     logging: false,
-
     dialectOptions: {
-      ssl: {
-        require: true,
-        rejectUnauthorized: false, // Railway internal SSL
-      },
+      // SSL একদম সরিয়ে দিন, কারণ ইন্টারনাল কানেকশনে এটি ঝামেলা করে
+      connectTimeout: 60000 
     },
-
     pool: {
       max: 5,
       min: 0,
       acquire: 60000,
       idle: 10000,
-    },
+    }
   }
 );
-
 /* ================= MODELS ================= */
 const User = sequelize.define("User", {
   fullName: {
