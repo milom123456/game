@@ -11,28 +11,30 @@ app.use(express.json());
 /* ================= CORS ================= */
 app.use(
   cors({
-    origin: "*",
-    methods: ["GET", "POST", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
+    origin: [
+      "http://localhost:5173",
+      "https://remarkable-healing-production-d38b.up.railway.app",
+    ],
+    credentials: true,
   })
 );
 
-/* ================= DATABASE (RAILWAY FIXED) ================= */
+/* ================= DATABASE (RAILWAY MYSQL) ================= */
 const sequelize = new Sequelize(
-  process.env.MYSQL_DATABASE,
-  process.env.MYSQL_USER,
-  process.env.MYSQL_PASSWORD,
+  process.env.MYSQLDATABASE,
+  process.env.MYSQLUSER,
+  process.env.MYSQLPASSWORD,
   {
-    host: process.env.MYSQL_HOST,
-    port: Number(process.env.MYSQL_PORT),
+    host: process.env.MYSQLHOST,
+    port: Number(process.env.MYSQLPORT),
     dialect: "mysql",
-    dialectModule: require("mysql2"), // ✅ MUST
+    dialectModule: require("mysql2"),
     logging: false,
 
     dialectOptions: {
       ssl: {
         require: true,
-        rejectUnauthorized: false, // ✅ Railway internal
+        rejectUnauthorized: false, // Railway internal SSL
       },
     },
 
@@ -47,9 +49,19 @@ const sequelize = new Sequelize(
 
 /* ================= MODELS ================= */
 const User = sequelize.define("User", {
-  fullName: { type: DataTypes.STRING, allowNull: false },
-  email: { type: DataTypes.STRING, allowNull: false, unique: true },
-  password: { type: DataTypes.STRING, allowNull: false },
+  fullName: {
+    type: DataTypes.STRING,
+    allowNull: false,
+  },
+  email: {
+    type: DataTypes.STRING,
+    allowNull: false,
+    unique: true,
+  },
+  password: {
+    type: DataTypes.STRING,
+    allowNull: false,
+  },
 });
 
 /* ================= DB READY FLAG ================= */
