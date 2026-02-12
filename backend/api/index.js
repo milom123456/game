@@ -71,7 +71,37 @@ app.use((req, res, next) => {
   if (!dbReady) return res.status(503).json({ message: "Database not connected" });
   next();
 });
+/* ================= CPAGRIP POSTBACK ROUTE ================= */
+app.get("/api/postback/cpagrip", async (req, res) => {
+  try {
+    const { tracking_id, payout, offer_id } = req.query;
 
+    if (!tracking_id || !payout) {
+      return res.status(400).send("Missing Data");
+    }
+
+    // ১. রিওয়ার্ড টেবিলে তথ্য সেভ করা
+    await Reward.create({
+      userId: tracking_id, 
+      offerName: `CPAGrip Offer #${offer_id}`,
+      amount: parseFloat(payout),
+      status: "completed"
+    });
+
+    // ২. ইউজারের ব্যালেন্স আপডেট করা
+    const user = await User.findByPk(tracking_id);
+    if (user) {
+      user.balance = parseFloat(user.balance || 0) + parseFloat(payout);
+      await user.save();
+      console.log(`✅ Balance Updated for User ${tracking_id}: +$${payout}`);
+    }
+
+    res.send("1"); // CPAGrip-কে সাকসেস মেসেজ
+  } catch (err) {
+    console.error("Postback Error:", err);
+    res.status(500).send("0");
+  }
+});
 /* ================= API ROUTES ================= */
 
 // --- AUTH ---
