@@ -7,121 +7,141 @@ const jwt = require("jsonwebtoken");
 
 const app = express();
 app.use(express.json());
-
-/* ================= CORS ================= */
 app.use(cors({ origin: true, credentials: true }));
 
-/* ================= DATABASE ================= */
-// আপনার Screenshot (72, 80) অনুযায়ী ইন্টারনাল হোস্ট ও পোর্ট ব্যবহার করা হয়েছে
+/* ================= DATABASE CONNECTION ================= */
 const sequelize = new Sequelize(
   process.env.MYSQLDATABASE,
   process.env.MYSQLUSER,
   process.env.MYSQLPASSWORD,
   {
-    host: process.env.MYSQLHOST || 'mysql.railway.internal', //
-    port: process.env.MYSQLPORT || 3306, //
+    host: process.env.MYSQLHOST,
+    port: process.env.MYSQLPORT || 3306,
     dialect: 'mysql',
-    dialectModule: require('mysql2'), 
+    dialectModule: require('mysql2'),
     logging: false,
-    dialectOptions: {
-      connectTimeout: 60000
-    }
+    dialectOptions: { connectTimeout: 60000 }
   }
 );
 
 /* ================= MODELS ================= */
+
+// ১. ইউজার মডেল (ব্যালেন্স সহ)
 const User = sequelize.define("User", {
   fullName: { type: DataTypes.STRING, allowNull: false },
   email: { type: DataTypes.STRING, allowNull: false, unique: true },
-  password: { type: DataTypes.STRING, allowNull: false }
+  password: { type: DataTypes.STRING, allowNull: false },
+  balance: { type: DataTypes.DECIMAL(10, 2), defaultValue: 0.00 },
+  role: { type: DataTypes.STRING, defaultValue: "user" } // user or admin
+});
+
+// ২. রিওয়ার্ড মডেল (অফার কমপ্লিট রেকর্ড)
+const Reward = sequelize.define("Reward", {
+  userId: { type: DataTypes.INTEGER, allowNull: false },
+  offerName: { type: DataTypes.STRING, allowNull: false },
+  amount: { type: DataTypes.DECIMAL(10, 2), allowNull: false },
+  status: { type: DataTypes.STRING, defaultValue: "completed" }
+});
+
+// ৩. ক্যাশআউট/উইথড্র মডেল
+const Withdrawal = sequelize.define("Withdrawal", {
+  userId: { type: DataTypes.INTEGER, allowNull: false },
+  method: { type: DataTypes.STRING, allowNull: false },
+  amount: { type: DataTypes.DECIMAL(10, 2), allowNull: false },
+  address: { type: DataTypes.STRING, allowNull: false },
+  status: { type: DataTypes.STRING, defaultValue: "pending" } // pending, approved, rejected
 });
 
 /* ================= DB INIT ================= */
 let dbReady = false;
-
 (async () => {
   try {
     await sequelize.authenticate();
     console.log("✅ Railway MySQL Connected");
     await sequelize.sync({ alter: true });
-    console.log("✅ Tables Synced");
+    console.log("✅ All Tables Synced");
     dbReady = true;
   } catch (err) {
-    console.error("❌ DB Error FULL:", err);
+    console.error("❌ DB Connection Error:", err);
   }
 })();
 
-/* ================= ROUTES ================= */
-
-// SIGNUP ROUTE
-app.post("/api/signup", async (req, res) => {
-  if (!dbReady) return res.status(503).json({ message: "DB not ready" });
-
-  try {
-    const { fullName, email, password } = req.body;
-    if (!fullName || !email || !password)
-      return res.status(400).json({ message: "All fields required" });
-
-    const exists = await User.findOne({ where: { email } });
-    if (exists) return res.status(400).json({ message: "Email already exists" });
-
-    const hash = await bcrypt.hash(password, 10);
-    const user = await User.create({ fullName, email, password: hash });
-
-    const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: "1d" });
-
-    res.json({ message: "Signup successful", token, user: { id: user.id, fullName, email } });
-  } catch (err) {
-    console.error("Signup error:", err);
-    res.status(500).json({ message: "Internal server error" });
-  }
+// DB Guard Middleware
+app.use((req, res, next) => {
+  if (!dbReady) return res.status(503).json({ message: "Database not connected" });
+  next();
 });
 
-// LOGIN ROUTE (নতুন যোগ করা হয়েছে)
-app.post("/api/login", async (req, res) => {
-  if (!dbReady) return res.status(503).json({ message: "DB not ready" });
+/* ================= API ROUTES ================= */
 
+// --- AUTH ---
+app.post("/api/signup", async (req, res) => {
+  try {
+    const { fullName, email, password } = req.body;
+    const hash = await bcrypt.hash(password, 10);
+    const user = await User.create({ fullName, email, password: hash });
+    res.json({ message: "Success", user: { id: user.id, fullName, email } });
+  } catch (err) { res.status(400).json({ message: "Email already exists" }); }
+});
+
+app.post("/api/login", async (req, res) => {
   try {
     const { email, password } = req.body;
-
-    if (!email || !password) {
-      return res.status(400).json({ message: "Email and password are required" });
-    }
-
-    // ইউজার চেক
     const user = await User.findOne({ where: { email } });
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
-
-    // পাসওয়ার্ড ভেরিফিকেশন
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) {
+    if (!user || !(await bcrypt.compare(password, user.password))) {
       return res.status(401).json({ message: "Invalid credentials" });
     }
+    const token = jwt.sign({ id: user.id, role: user.role }, process.env.JWT_SECRET || 'secret', { expiresIn: "1d" });
+    res.json({ token, user: { id: user.id, fullName: user.fullName, email: user.email, balance: user.balance, role: user.role } });
+  } catch (err) { res.status(500).json({ message: "Server error" }); }
+});
 
-    // টোকেন তৈরি
-    const token = jwt.sign(
-      { id: user.id }, 
-      process.env.JWT_SECRET || 'myjwtsecret', //
-      { expiresIn: "1d" }
-    );
+// --- USER DATA ---
+app.get("/api/user/me/:id", async (req, res) => {
+  const user = await User.findByPk(req.params.id);
+  if (!user) return res.status(404).json({ message: "User not found" });
+  res.json(user);
+});
 
-    res.json({
-      message: "Login successful",
-      token,
-      user: {
-        id: user.id,
-        fullName: user.fullName,
-        email: user.email
-      }
-    });
-  } catch (err) {
-    console.error("Login error:", err);
-    res.status(500).json({ message: "Internal server error" });
-  }
+// --- OFFERWALL POSTBACK (Rewards) ---
+app.get("/api/postback", async (req, res) => {
+  const { userId, amount, offerName } = req.query;
+  try {
+    await Reward.create({ userId, amount, offerName });
+    const user = await User.findByPk(userId);
+    if (user) {
+      user.balance = parseFloat(user.balance) + parseFloat(amount);
+      await user.save();
+    }
+    res.send("1"); // Success for Offerwall
+  } catch (err) { res.status(500).send("0"); }
+});
+
+// --- CASHOUT (Withdrawal) ---
+app.post("/api/withdraw", async (req, res) => {
+  const { userId, amount, method, address } = req.body;
+  try {
+    const user = await User.findByPk(userId);
+    if (!user || user.balance < amount) return res.status(400).json({ message: "Insufficient balance" });
+
+    user.balance -= amount;
+    await user.save();
+    await Withdrawal.create({ userId, amount, method, address });
+
+    res.json({ message: "Withdrawal request submitted!" });
+  } catch (err) { res.status(500).json({ message: "Error processing withdrawal" }); }
+});
+
+// --- ADMIN ANALYTICS ---
+app.get("/api/admin/stats", async (req, res) => {
+  const totalUsers = await User.count();
+  const totalWithdrawn = await Withdrawal.sum('amount', { where: { status: 'approved' } }) || 0;
+  const pendingCashouts = await Withdrawal.count({ where: { status: 'pending' } });
+  const completedOffers = await Reward.count();
+  
+  res.json({ totalUsers, totalWithdrawn, pendingCashouts, completedOffers });
 });
 
 /* ================= SERVER ================= */
-const PORT = process.env.PORT || 8080; //
-app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+const PORT = process.env.PORT || 8080;
+app.listen(PORT, () => console.log(`🚀 Backend running on port ${PORT}`));
