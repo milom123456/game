@@ -18,11 +18,8 @@ const sequelize = new Sequelize(
   process.env.MYSQLPASSWORD,
   {
     host: process.env.MYSQLHOST,
-    port: Number(process.env.MYSQLPORT) || 3306,
-    dialect: "mysql",
-    dialectModule: require("mysql2"),
-    logging: false,
-    pool: { max: 5, min: 0, acquire: 60000, idle: 10000 }
+    port: process.env.MYSQLPORT || 3306,
+    dialect: 'mysql'
   }
 );
 
