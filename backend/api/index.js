@@ -12,14 +12,20 @@ app.use(express.json());
 app.use(cors({ origin: true, credentials: true }));
 
 /* ================= DATABASE ================= */
+// আপনার Screenshot (72, 80) অনুযায়ী ইন্টারনাল হোস্ট ও পোর্ট ব্যবহার করা হয়েছে
 const sequelize = new Sequelize(
   process.env.MYSQLDATABASE,
   process.env.MYSQLUSER,
   process.env.MYSQLPASSWORD,
   {
-    host: process.env.MYSQLHOST,
-    port: process.env.MYSQLPORT || 3306,
-    dialect: 'mysql'
+    host: process.env.MYSQLHOST || 'mysql.railway.internal', //
+    port: process.env.MYSQLPORT || 3306, //
+    dialect: 'mysql',
+    dialectModule: require('mysql2'), 
+    logging: false,
+    dialectOptions: {
+      connectTimeout: 60000
+    }
   }
 );
 
@@ -46,6 +52,8 @@ let dbReady = false;
 })();
 
 /* ================= ROUTES ================= */
+
+// SIGNUP ROUTE
 app.post("/api/signup", async (req, res) => {
   if (!dbReady) return res.status(503).json({ message: "DB not ready" });
 
@@ -69,6 +77,51 @@ app.post("/api/signup", async (req, res) => {
   }
 });
 
+// LOGIN ROUTE (নতুন যোগ করা হয়েছে)
+app.post("/api/login", async (req, res) => {
+  if (!dbReady) return res.status(503).json({ message: "DB not ready" });
+
+  try {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({ message: "Email and password are required" });
+    }
+
+    // ইউজার চেক
+    const user = await User.findOne({ where: { email } });
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // পাসওয়ার্ড ভেরিফিকেশন
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res.status(401).json({ message: "Invalid credentials" });
+    }
+
+    // টোকেন তৈরি
+    const token = jwt.sign(
+      { id: user.id }, 
+      process.env.JWT_SECRET || 'myjwtsecret', //
+      { expiresIn: "1d" }
+    );
+
+    res.json({
+      message: "Login successful",
+      token,
+      user: {
+        id: user.id,
+        fullName: user.fullName,
+        email: user.email
+      }
+    });
+  } catch (err) {
+    console.error("Login error:", err);
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
+
 /* ================= SERVER ================= */
-const PORT = process.env.PORT || 8080;
+const PORT = process.env.PORT || 8080; //
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
